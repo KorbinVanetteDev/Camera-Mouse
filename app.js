@@ -81,6 +81,10 @@ function pickLeftRight(hands) {
   let left = hands.find(h => h.label === "Left");
   let right = hands.find(h => h.label === "Right");
 
+  if (!left && !right && hands.length === 1) {
+    return { left: null, right: hands[0] };
+  }
+
   if (!left || !right) {
     const unknown = hands.filter(h => !h.label);
     if (unknown.length >= 2) {
@@ -262,6 +266,11 @@ hands.setOptions({
 });
 
 hands.onResults(results => {
+  if (results.image?.width && results.image?.height) {
+    if (results.image.width !== width || results.image.height !== height) {
+      setSize(results.image.width, results.image.height);
+    }
+  }
   ctx.clearRect(0, 0, width, height);
 
   // Draw the flipped image (same as Python's cv2.flip before processing)
@@ -313,10 +322,12 @@ hands.onResults(results => {
   }
 
   const { left, right } = pickLeftRight(handsData);
+  const grabHand = right ?? left;
+  const scaleHand = left && right ? left : null;
 
   addShapes(left, right);
-  grabAndMove(right);
-  scaleShape(left);
+  grabAndMove(grabHand);
+  scaleShape(scaleHand);
 
   drawShapes();
   drawButton(addCubeBtn);
