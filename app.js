@@ -44,6 +44,12 @@ let activeType = null;
 let activeIndex = null;
 let prevHandDist = null;
 
+// Stabilization
+const pinchOn = 80;
+const pinchOff = 95;
+const smoothAlpha = 0.5;
+const handState = new Map();
+
 // Buttons
 const addCubeBtn = { x: 20, y: 20, w: 160, h: 50, pressed: false, label: "Add Cube" };
 const addSphereBtn = { x: 200, y: 20, w: 170, h: 50, pressed: false, label: "Add Sphere" };
@@ -238,6 +244,13 @@ function drawShapes() {
   }
 }
 
+function getHandState(key) {
+  if (!handState.has(key)) {
+    handState.set(key, { x: null, y: null, pinching: false });
+  }
+  return handState.get(key);
+}
+
 const hands = new Hands({
   locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
 });
@@ -270,7 +283,7 @@ hands.onResults(results => {
 
       const mid = { x: Math.floor((thumb.x + index.x) / 2), y: Math.floor((thumb.y + index.y) / 2) };
       const pinchDist = Math.hypot(thumb.x - index.x, thumb.y - index.y);
-      const pinching = pinchDist <= 80;
+      let pinching = pinchDist <= pinchOn;
 
       let label = results.multiHandedness?.[i]?.classification?.[0]?.label || null;
       if (label === "Left") {
@@ -278,11 +291,23 @@ hands.onResults(results => {
       } else if (label === "Right") {
         label = "Left";
       }
-      handsData.push({ x: mid.x, y: mid.y, pinching, label });
+
+      const key = label ?? `Unknown_${i}`;
+      const state = getHandState(key);
+      state.x = state.x === null ? mid.x : state.x * (1 - smoothAlpha) + mid.x * smoothAlpha;
+      state.y = state.y === null ? mid.y : state.y * (1 - smoothAlpha) + mid.y * smoothAlpha;
+      if (state.pinching) {
+        if (pinchDist > pinchOff) state.pinching = false;
+      } else {
+        if (pinchDist <= pinchOn) state.pinching = true;
+      }
+      pinching = state.pinching;
+
+      handsData.push({ x: state.x, y: state.y, pinching, label });
 
       ctx.fillStyle = pinching ? "green" : "red";
       ctx.beginPath();
-      ctx.arc(mid.x, mid.y, 20, 0, Math.PI * 2);
+      ctx.arc(state.x, state.y, 20, 0, Math.PI * 2);
       ctx.fill();
     });
   }
