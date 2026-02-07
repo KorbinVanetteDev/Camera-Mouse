@@ -272,7 +272,12 @@ hands.onResults(results => {
       const pinchDist = Math.hypot(thumb.x - index.x, thumb.y - index.y);
       const pinching = pinchDist <= 80;
 
-      const label = results.multiHandedness?.[i]?.classification?.[0]?.label || null;
+      let label = results.multiHandedness?.[i]?.classification?.[0]?.label || null;
+      if (label === "Left") {
+        label = "Right";
+      } else if (label === "Right") {
+        label = "Left";
+      }
       handsData.push({ x: mid.x, y: mid.y, pinching, label });
 
       ctx.fillStyle = pinching ? "green" : "red";
