@@ -2,17 +2,26 @@ const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
+const inputCanvas = document.createElement("canvas");
+const inputCtx = inputCanvas.getContext("2d");
+
 let width = 1280;
 let height = 720;
 
-function resize() {
-  width = window.innerWidth;
-  height = window.innerHeight;
-  canvas.width = width;
-  canvas.height = height;
+function setSize(w, h) {
+  width = w;
+  height = h;
+  canvas.width = w;
+  canvas.height = h;
+  inputCanvas.width = w;
+  inputCanvas.height = h;
 }
-window.addEventListener("resize", resize);
-resize();
+
+video.addEventListener("loadedmetadata", () => {
+  if (video.videoWidth && video.videoHeight) {
+    setSize(video.videoWidth, video.videoHeight);
+  }
+});
 
 // Settings
 const defaultCubeSize = 160;
@@ -242,12 +251,16 @@ hands.setOptions({
 hands.onResults(results => {
   ctx.clearRect(0, 0, width, height);
 
-  // Mirror video for a more natural feel
-  ctx.save();
-  ctx.scale(-1, 1);
-  ctx.translate(-width, 0);
+  // Draw the flipped image (same as Python's cv2.flip before processing)
   ctx.drawImage(results.image, 0, 0, width, height);
-  ctx.restore();
+
+  // Draw landmarks like Python
+  if (results.multiHandLandmarks) {
+    results.multiHandLandmarks.forEach(landmarks => {
+      drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: "#000000", lineWidth: 2 });
+      drawLandmarks(ctx, landmarks, { color: "#ffffff", lineWidth: 2, radius: 4 });
+    });
+  }
 
   const handsData = [];
   if (results.multiHandLandmarks) {
@@ -255,7 +268,7 @@ hands.onResults(results => {
       const thumb = toPixel(landmarks[4]);
       const index = toPixel(landmarks[8]);
 
-      const mid = { x: (thumb.x + index.x) / 2, y: (thumb.y + index.y) / 2 };
+      const mid = { x: Math.floor((thumb.x + index.x) / 2), y: Math.floor((thumb.y + index.y) / 2) };
       const pinchDist = Math.hypot(thumb.x - index.x, thumb.y - index.y);
       const pinching = pinchDist <= 80;
 
@@ -264,7 +277,7 @@ hands.onResults(results => {
 
       ctx.fillStyle = pinching ? "green" : "red";
       ctx.beginPath();
-      ctx.arc(mid.x, mid.y, 12, 0, Math.PI * 2);
+      ctx.arc(mid.x, mid.y, 20, 0, Math.PI * 2);
       ctx.fill();
     });
   }
@@ -283,7 +296,13 @@ hands.onResults(results => {
 
 const camera = new Camera(video, {
   onFrame: async () => {
-    await hands.send({ image: video });
+    // Flip BEFORE sending to MediaPipe (matches Python)
+    inputCtx.save();
+    inputCtx.scale(-1, 1);
+    inputCtx.translate(-width, 0);
+    inputCtx.drawImage(video, 0, 0, width, height);
+    inputCtx.restore();
+    await hands.send({ image: inputCanvas });
   },
   width: 1280,
   height: 720
